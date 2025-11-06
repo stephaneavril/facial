@@ -1,40 +1,107 @@
 <!doctype html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Detector de máscara - Demo</title>
-    <style>
-      body { font-family: Arial, Helvetica, sans-serif; margin: 2rem; }
-      .card { max-width:600px; margin:auto; padding:1rem; border:1px solid #ddd; border-radius:8px; }
-      img { max-width:100%; height:auto; display:block; margin-bottom:1rem; }
-      .code { font-weight:700; font-size:1.6rem; color:green; background:#f0fff0; padding:0.5rem; border-radius:4px; }
-      .note { color:#555; font-size:0.9rem; margin-top:1rem;}
-    </style>
-  </head>
-  <body>
-    <div class="card">
-      <h2>Demo: Reconocimiento de máscara (ORBS) </h2>
-      <p>Sube una foto o toma una desde tu teléfono. Si la app reconoce la <em>máscara objetivo</em>, mostrará el código secreto.</p>
-      <p><strong>Imagen objetivo (ejemplo):</strong></p>
-      <img src="{{ url_for('static', filename='target_mask.png') }}" alt="Target mask">
-      <form method="post" enctype="multipart/form-data">
-        <input type="file" accept="image/*" name="photo" required>
-        <br/><br/>
-        <button type="submit">Comprobar foto</button>
-      </form>
-      {% with messages = get_flashed_messages() %}
-        {% if messages %}
-          <ul style="color:#a00;">
-          {% for m in messages %}
-            <li>{{ m }}</li>
-          {% endfor %}
-          </ul>
-        {% endif %}
-      {% endwith %}
-      {% if code %}
-        <p class="code">Código desbloqueado: {{ code }}</p>
-      {% endif %}
-      <p class="note"><strong>Advertencia:</strong> Esta app es un prototipo educativo. No se recomienda usar reconocimiento facial para control de acceso en producción.</p>
+<head>
+  <meta charset="utf-8" />
+  <title>James Bond Scanner - Escape Game</title>
+  <style>
+    body { background:#0b0b0b; color:#eee; font-family:Arial, sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }
+    .box { width:820px; background:linear-gradient(180deg,#101010, #141414); border-radius:12px; padding:18px; box-shadow:0 8px 30px rgba(0,0,0,0.8); }
+    video { width: 640px; height:480px; background:#000; border-radius:6px; display:block; margin-bottom:8px; }
+    canvas { display:none; }
+    .hud { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .btn { background:#0066ff; color:white; padding:10px 14px; border-radius:8px; cursor:pointer; border:none; font-weight:700; }
+    .status { font-family:monospace; color:#9ff; }
+    .code { margin-top:12px; font-size:1.6rem; color:#00ff88; font-weight:800; }
+    .target { width:100px; height:100px; object-fit:cover; border:1px solid #222; border-radius:6px; }
+    .frame { position:relative; display:inline-block; }
+    .crosshair { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:120px; height:120px; border:2px dashed rgba(255,255,255,0.25); border-radius:50%; pointer-events:none; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>Scanner — Modo James Bond</h2>
+    <div style="display:flex;gap:12px;align-items:flex-start;">
+      <div class="frame">
+        <video id="video" autoplay playsinline></video>
+        <div class="crosshair"></div>
+      </div>
+      <div style="width:180px;">
+        <p>Objetivo:</p>
+        <img class="target" src="/static/target_mask.png" alt="target">
+        <p style="margin-top:12px">Status: <span id="status" class="status">listo</span></p>
+        <button id="scanBtn" class="btn">Escanear</button>
+        <p class="code" id="codeArea"></p>
+      </div>
     </div>
-  </body>
+
+    <canvas id="snap" width="640" height="480"></canvas>
+  </div>
+
+<script>
+const video = document.getElementById('video');
+const snap = document.getElementById('snap');
+const ctx = snap.getContext('2d');
+const status = document.getElementById('status');
+const scanBtn = document.getElementById('scanBtn');
+const codeArea = document.getElementById('codeArea');
+
+async function startCamera(){
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+    video.srcObject = stream;
+    await video.play();
+    status.textContent = 'cámara lista';
+  } catch (e) {
+    status.textContent = 'error cámara';
+    alert('No se pudo acceder a la cámara. Usa HTTPS y permite cámara.');
+  }
+}
+
+scanBtn.addEventListener('click', async () => {
+  status.textContent = 'escaneando...';
+  // dibujo frame
+  ctx.drawImage(video, 0, 0, snap.width, snap.height);
+  const dataUrl = snap.toDataURL('image/png');
+
+  try {
+    const resp = await fetch('/scan', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ image: dataUrl })
+    });
+    const j = await resp.json();
+    if (!j.ok) {
+      status.textContent = 'error';
+      alert(j.msg || 'Error');
+      return;
+    }
+    status.textContent = 'matches: ' + j.matches;
+    if (j.recognized) {
+      codeArea.textContent = 'CÓDIGO: ' + j.code;
+      // efecto de sonido o animación tipo James Bond
+      document.body.style.background = '#030507';
+      flash();
+    } else {
+      codeArea.textContent = '';
+      // pequeño feedback
+      status.textContent = 'No corresponde — intenta de nuevo';
+    }
+  } catch (err) {
+    status.textContent = 'error conexión';
+    console.error(err);
+  }
+});
+
+function flash(){
+  let t = 0;
+  const iv = setInterval(()=> {
+    document.querySelector('.box').style.boxShadow = t%2===0 ? '0 0 40px rgba(0,255,150,0.25)' : '0 0 0 rgba(0,0,0,0)';
+    t++;
+    if (t>6) { clearInterval(iv); document.querySelector('.box').style.boxShadow='0 8px 30px rgba(0,0,0,0.8)'; }
+  }, 180);
+}
+
+startCamera();
+</script>
+</body>
 </html>

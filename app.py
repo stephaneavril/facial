@@ -1,77 +1,107 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
-import os
-import cv2
-import numpy as np
-from werkzeug.utils import secure_filename
-
-UPLOAD_FOLDER = 'uploads'
-ALLOWED_EXT = {'png','jpg','jpeg'}
+from flask import Flask, render_template, request, jsonify, send_from_directory
+import os, cv2, numpy as np, base64
+from io import BytesIO
+from PIL import Image
+import tempfile
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.secret_key = 'change-this-secret'
+app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024
 
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+TARGET_PATH = os.path.join('static', 'target_mask.png')
 
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.',1)[1].lower() in ALLOWED_EXT
+# --- Utilidades de imagen ---
+def b64_to_image(b64_string):
+    header, encoded = b64_string.split(',', 1)
+    data = base64.b64decode(encoded)
+    img = Image.open(BytesIO(data)).convert('RGB')
+    arr = np.array(img)[:, :, ::-1]  # RGB -> BGR
+    return arr
 
-def is_match(upload_path, target_path, min_matches=25):
-    """Compare two images using ORB feature matching. Returns True if enough good matches."""
-    img1 = cv2.imread(target_path, cv2.IMREAD_GRAYSCALE)
-    img2 = cv2.imread(upload_path, cv2.IMREAD_GRAYSCALE)
-    if img1 is None or img2 is None:
-        return False, 0
-    # resize for speed if too large
-    max_size = 800
-    def resize_if_needed(img):
-        h,w = img.shape
-        if max(h,w) > max_size:
-            scale = max_size / float(max(h,w))
-            img = cv2.resize(img, (int(w*scale), int(h*scale)))
-        return img
-    img1 = resize_if_needed(img1)
-    img2 = resize_if_needed(img2)
+def detect_face_and_crop(img_bgr):
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    # Usa el detector Haar (rápido y suficiente para prototipo)
+    haar = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    faces = haar.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(80,80))
+    if len(faces) == 0:
+        return None
+    # si hay varias, toma la más grande
+    faces = sorted(faces, key=lambda r: r[2]*r[3], reverse=True)
+    (x,y,w,h) = faces[0]
+    pad = int(0.4 * h)  # algo de pad para cubrir máscara que esté abajo/arriba
+    x1 = max(0, x - pad); y1 = max(0, y - pad)
+    x2 = min(img_bgr.shape[1], x + w + pad); y2 = min(img_bgr.shape[0], y + h + pad)
+    crop = img_bgr[y1:y2, x1:x2]
+    return crop
 
-    orb = cv2.ORB_create(1000)
-    kp1, des1 = orb.detectAndCompute(img1, None)
-    kp2, des2 = orb.detectAndCompute(img2, None)
+def orb_match_count(imgA, imgB, n_features=1000):
+    # convierte a escala de grises y redimensiona para consistencia
+    def prep(im):
+        g = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+        h,w = g.shape
+        max_sz = 800
+        if max(h,w) > max_sz:
+            scale = max_sz / float(max(h,w))
+            g = cv2.resize(g, (int(w*scale), int(h*scale)))
+        return g
+    a = prep(imgA); b = prep(imgB)
+    orb = cv2.ORB_create(nfeatures=n_features)
+    kp1, des1 = orb.detectAndCompute(a, None)
+    kp2, des2 = orb.detectAndCompute(b, None)
     if des1 is None or des2 is None:
-        return False, 0
-    # BF matcher with Hamming
-    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
-    matches = bf.knnMatch(des1, des2, k=2)
-    # ratio test
+        return 0
+    bf = cv2.BFMatcher(cv2.NORM_HAMMING)
+    try:
+        matches = bf.knnMatch(des1, des2, k=2)
+    except cv2.error:
+        return 0
     good = []
-    for m,n in matches:
+    for m_n in matches:
+        if len(m_n) != 2:
+            continue
+        m, n = m_n
         if m.distance < 0.75 * n.distance:
             good.append(m)
-    return (len(good) >= min_matches), len(good)
+    return len(good)
 
-@app.route('/', methods=['GET','POST'])
+# --- Rutas ---
+@app.route('/')
 def index():
-    code = None
-    votes = None
-    if request.method == 'POST':
-        if 'photo' not in request.files:
-            flash('No file part')
-            return redirect(request.url)
-        file = request.files['photo']
-        if file.filename == '':
-            flash('No selected file')
-            return redirect(request.url)
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            upload_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(upload_path)
-            target_path = os.path.join('static', 'target_mask.png')
-            match, n_matches = is_match(upload_path, target_path)
-            if match:
-                # Detected target mask -> reveal code
-                code = "4789#"
-            else:
-                flash(f"No match detected (good matches: {n_matches}). Try another photo or adjust lighting.")
-    return render_template('index.html', code=code)
+    return render_template('index.html')
+
+@app.route('/scan', methods=['POST'])
+def scan():
+    data = request.json.get('image')
+    if not data:
+        return jsonify({'ok': False, 'msg': 'No image sent'}), 400
+    try:
+        img = b64_to_image(data)
+    except Exception as e:
+        return jsonify({'ok': False, 'msg': 'Invalid image'}), 400
+
+    face_crop = detect_face_and_crop(img)
+    if face_crop is None:
+        return jsonify({'ok': False, 'msg': 'No face detected'}), 200
+
+    # carga target
+    if not os.path.exists(TARGET_PATH):
+        return jsonify({'ok': False, 'msg': 'Target image missing on server'}), 500
+    target = cv2.imread(TARGET_PATH)
+    if target is None:
+        return jsonify({'ok': False, 'msg': 'Cannot read target file'}), 500
+
+    matches = orb_match_count(face_crop, target)
+    # Umbral: ajustable.  --> empieza con 25 para prototipo; sube si hay falsos positivos.
+    THRESH = 25
+    recognized = matches >= THRESH
+
+    return jsonify({'ok': True, 'recognized': recognized, 'matches': matches, 'code': "4789#" if recognized else None})
+
+# servir la imagen objetivo (opcional)
+@app.route('/static/<path:filename>')
+def static_files(filename):
+    return send_from_directory('static', filename)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # usa $PORT cuando esté en Render, pero para local dejamos 5000
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
