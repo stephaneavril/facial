@@ -2,105 +2,149 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>James Bond Scanner - Escape Game</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>007 Secure Scan</title>
   <style>
-    body { background:#0b0b0b; color:#eee; font-family:Arial, sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }
-    .box { width:820px; background:linear-gradient(180deg,#101010, #141414); border-radius:12px; padding:18px; box-shadow:0 8px 30px rgba(0,0,0,0.8); }
-    video { width: 640px; height:480px; background:#000; border-radius:6px; display:block; margin-bottom:8px; }
-    canvas { display:none; }
-    .hud { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-    .btn { background:#0066ff; color:white; padding:10px 14px; border-radius:8px; cursor:pointer; border:none; font-weight:700; }
-    .status { font-family:monospace; color:#9ff; }
-    .code { margin-top:12px; font-size:1.6rem; color:#00ff88; font-weight:800; }
-    .target { width:100px; height:100px; object-fit:cover; border:1px solid #222; border-radius:6px; }
-    .frame { position:relative; display:inline-block; }
-    .crosshair { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:120px; height:120px; border:2px dashed rgba(255,255,255,0.25); border-radius:50%; pointer-events:none; }
+    :root{
+      --bg:#05070C;
+      --panel:#0B0F19;
+      --panel2:#0F1524;
+      --accent:#35F3B7;
+      --accent2:#24B1FF;
+      --danger:#FF4D70;
+      --muted:#9bb3c7;
+    }
+    html,body{height:100%;}
+    body{
+      margin:0;
+      height:100%;
+      color:#E6EEF7;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial;
+      background:
+        radial-gradient(1200px 800px at 120% -10%, #0b1a2a55, transparent 60%),
+        radial-gradient(900px 700px at -30% 120%, #141e2f66, transparent 60%),
+        linear-gradient(180deg, #06080F 0%, #05070C 100%);
+    }
+    .shell{max-width:1100px;margin:32px auto;padding:20px;}
+    .header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px;}
+    .title{font-weight:800;letter-spacing:.5px;font-size:24px}
+    .chip{font-size:12px;opacity:.8;padding:6px 10px;border:1px solid #1A2436;border-radius:20px;background:linear-gradient(180deg,#0E1422,#0B1019);}
+    .grid{display:grid;grid-template-columns:1.3fr .7fr;gap:16px}
+    .panel{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid #10192a;border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,.35);overflow:hidden;}
+    .camera{position:relative;padding:14px;}
+    video{width:100%;aspect-ratio:4/3;background:#000;border-radius:10px;}
+    canvas{display:none;}
+    .hud{pointer-events:none;position:absolute;inset:14px;border-radius:10px;overflow:hidden;}
+    .reticle{position:absolute;left:50%;top:50%;width:34%;aspect-ratio:1;transform:translate(-50%,-50%);border:2px dashed rgba(255,255,255,.18);border-radius:50%;}
+    .sweep{position:absolute;left:50%;top:50%;width:46%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;
+      background: conic-gradient(from 0deg, rgba(53,243,183,.35), rgba(53,243,183,0) 60%);
+      filter: blur(10px) saturate(120%);animation: spin 2.6s linear infinite;opacity:.65;}
+    @keyframes spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+    .scanline{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg, transparent, rgba(36,177,255,.9), transparent);animation: line 2.4s linear infinite;}
+    @keyframes line{0%{top:10%}50%{top:80%}100%{top:10%}}
+    .right{display:flex;flex-direction:column;height:100%}
+    .right .inner{padding:16px;display:flex;flex-direction:column;gap:14px}
+    .row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+    .label{font-size:12px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+    .value{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}
+    .btns{display:flex;gap:10px;flex-wrap:wrap}
+    .btn{background:linear-gradient(180deg,#0E2031,#0C1826);border:1px solid #183047;color:#E6EEF7;padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:700;}
+    .btn.primary{border-color:#1a3e3a;background:linear-gradient(180deg,#0f2a24,#0b1f1a);box-shadow:inset 0 0 0 1px #123a32, 0 0 20px rgba(53,243,183,.12)}
+    .btn:active{transform:translateY(1px)}
+    .code{margin-top:8px;font-size:28px;font-weight:900;color:var(--accent);letter-spacing:.06em;text-shadow:0 0 22px rgba(53,243,183,.35);opacity:0;transform: translateY(6px);transition:.2s ease;}
+    .code.show{opacity:1;transform:none}
+    .tiny{font-size:12px;color:var(--muted)}
+    .divider{height:1px;background:linear-gradient(90deg, transparent, #16223a, transparent);margin:6px 0}
+    .badge{font-size:11px;color:#77ffd9}
+    .footer{padding:10px 16px;border-top:1px solid #111a2a;background:rgba(6,10,18,.35)}
+    .led{width:9px;height:9px;border-radius:50%;background:radial-gradient(circle at 30% 30%, #88ffd4, #18a37f 60%, #0c5847);box-shadow:0 0 14px rgba(53,243,183,.6);display:inline-block;vertical-align:middle;margin-right:8px;}
   </style>
 </head>
 <body>
-  <div class="box">
-    <h2>Scanner — Modo James Bond</h2>
-    <div style="display:flex;gap:12px;align-items:flex-start;">
-      <div class="frame">
-        <video id="video" autoplay playsinline></video>
-        <div class="crosshair"></div>
-      </div>
-      <div style="width:180px;">
-        <p>Objetivo:</p>
-        <img class="target" src="/static/target_mask.png" alt="target">
-        <p style="margin-top:12px">Status: <span id="status" class="status">listo</span></p>
-        <button id="scanBtn" class="btn">Escanear</button>
-        <p class="code" id="codeArea"></p>
-      </div>
-    </div>
-
-    <canvas id="snap" width="640" height="480"></canvas>
+<div class="shell">
+  <div class="header">
+    <div class="title">007 Secure Scan</div>
+    <div class="chip">Prototype • Escape Game</div>
   </div>
 
+  <div class="grid">
+    <div class="panel camera">
+      <video id="video" autoplay playsinline></video>
+      <div class="hud">
+        <div class="scanline"></div>
+        <div class="sweep"></div>
+        <div class="reticle"></div>
+      </div>
+      <canvas id="snap" width="640" height="480"></canvas>
+    </div>
+
+    <div class="panel right">
+      <div class="inner">
+        <div class="row"><div class="label">Status</div><div class="value" id="status">Inicializando…</div></div>
+        <div class="row"><div class="label">Matches</div><div class="value" id="matches">0</div></div>
+        <div class="divider"></div>
+        <div class="btns">
+          <button id="scanBtn" class="btn primary">Escanear ahora</button>
+          <button id="autoBtn" class="btn">Auto-scan</button>
+          <button id="resetBtn" class="btn">Reset</button>
+        </div>
+        <div id="codeArea" class="code"></div>
+        <div class="tiny">Verificación silenciosa. El sistema compara el rostro con un patrón interno.</div>
+      </div>
+      <div class="footer">
+        <span class="led"></span><span class="badge" id="ledText">Ready</span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
-const video = document.getElementById('video');
-const snap = document.getElementById('snap');
-const ctx = snap.getContext('2d');
-const status = document.getElementById('status');
-const scanBtn = document.getElementById('scanBtn');
-const codeArea = document.getElementById('codeArea');
+const video=document.getElementById('video');
+const snap=document.getElementById('snap');
+const ctx=snap.getContext('2d');
+const statusEl=document.getElementById('status');
+const matchesEl=document.getElementById('matches');
+const codeArea=document.getElementById('codeArea');
+const scanBtn=document.getElementById('scanBtn');
+const autoBtn=document.getElementById('autoBtn');
+const resetBtn=document.getElementById('resetBtn');
+const ledText=document.getElementById('ledText');
+let auto=false, autoTimer=null;
 
 async function startCamera(){
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
-    video.srcObject = stream;
-    await video.play();
-    status.textContent = 'cámara lista';
-  } catch (e) {
-    status.textContent = 'error cámara';
-    alert('No se pudo acceder a la cámara. Usa HTTPS y permite cámara.');
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'},audio:false});
+    video.srcObject=stream; await video.play();
+    statusEl.textContent='Cámara lista'; ledText.textContent='Live';
+  }catch(e){
+    statusEl.textContent='Error cámara (HTTPS y permisos)'; ledText.textContent='Blocked';
   }
 }
-
-scanBtn.addEventListener('click', async () => {
-  status.textContent = 'escaneando...';
-  // dibujo frame
-  ctx.drawImage(video, 0, 0, snap.width, snap.height);
-  const dataUrl = snap.toDataURL('image/png');
-
-  try {
-    const resp = await fetch('/scan', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ image: dataUrl })
-    });
-    const j = await resp.json();
-    if (!j.ok) {
-      status.textContent = 'error';
-      alert(j.msg || 'Error');
-      return;
-    }
-    status.textContent = 'matches: ' + j.matches;
-    if (j.recognized) {
-      codeArea.textContent = 'CÓDIGO: ' + j.code;
-      // efecto de sonido o animación tipo James Bond
-      document.body.style.background = '#030507';
-      flash();
-    } else {
-      codeArea.textContent = '';
-      // pequeño feedback
-      status.textContent = 'No corresponde — intenta de nuevo';
-    }
-  } catch (err) {
-    status.textContent = 'error conexión';
-    console.error(err);
-  }
-});
-
-function flash(){
-  let t = 0;
-  const iv = setInterval(()=> {
-    document.querySelector('.box').style.boxShadow = t%2===0 ? '0 0 40px rgba(0,255,150,0.25)' : '0 0 0 rgba(0,0,0,0)';
-    t++;
-    if (t>6) { clearInterval(iv); document.querySelector('.box').style.boxShadow='0 8px 30px rgba(0,0,0,0.8)'; }
-  }, 180);
+function takeShot(){
+  const w=video.videoWidth||640, h=video.videoHeight||480;
+  snap.width=w; snap.height=h; ctx.drawImage(video,0,0,w,h);
+  return snap.toDataURL('image/png');
 }
-
+async function scanOnce(){
+  statusEl.textContent='Escaneando…';
+  const dataUrl=takeShot();
+  try{
+    const resp=await fetch('/scan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:dataUrl})});
+    const j=await resp.json();
+    if(!j.ok){statusEl.textContent='Error';return;}
+    matchesEl.textContent=j.matches;
+    if(j.recognized){
+      codeArea.textContent='CÓDIGO: '+j.code; codeArea.classList.add('show');
+      statusEl.textContent='Match confirmado'; ledText.textContent='Authorized';
+      stopAuto();
+    }else{ statusEl.textContent='No coincide'; }
+  }catch(err){ statusEl.textContent='Error de red'; }
+}
+function startAuto(){ if(autoTimer)return; auto=true; autoBtn.classList.add('primary'); statusEl.textContent='Auto-scan activo'; autoTimer=setInterval(scanOnce,1700); }
+function stopAuto(){ auto=false; autoBtn.classList.remove('primary'); if(autoTimer){clearInterval(autoTimer); autoTimer=null;} }
+scanBtn.addEventListener('click',scanOnce);
+autoBtn.addEventListener('click',()=>auto?stopAuto():startAuto());
+resetBtn.addEventListener('click',()=>{stopAuto(); matchesEl.textContent='0'; codeArea.textContent=''; codeArea.classList.remove('show'); statusEl.textContent='Listo';});
 startCamera();
 </script>
 </body>
