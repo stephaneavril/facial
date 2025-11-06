@@ -94,7 +94,7 @@ def scan():
     THRESH = 25
     recognized = matches >= THRESH
 
-    return jsonify({'ok': True, 'recognized': recognized, 'matches': matches, 'code': "4789#" if recognized else None})
+    return jsonify({'ok': True, 'recognized': recognized, 'matches': matches, 'code': "265" if recognized else None})
 
 # servir la imagen objetivo (opcional)
 @app.route('/static/<path:filename>')
