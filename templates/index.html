@@ -3,142 +3,85 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Face Access</title>
+  <title>Control de acceso — Agente 007</title>
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial; margin:0; background:#0b0f14; color:#e6eef7; display:flex; min-height:100vh; align-items:center; justify-content:center}
-    .card{width:min(920px,92vw); background:#121a23; border:1px solid #203040; border-radius:18px; padding:24px 24px 28px}
-    h1{margin:0 0 10px 0; font-size:22px; color:#b9d4ff}
-    .row{display:grid; grid-template-columns: 1fr 1fr; gap:18px}
-    .pane{background:#0f151d; border:1px solid #1c2937; border-radius:14px; padding:14px}
-    video,canvas{width:100%; border-radius:10px; background:#000}
-    .status{margin-top:10px; font-size:14px; color:#91a9c4}
-    .led{display:inline-block; padding:.25rem .6rem; border-radius:999px; font-weight:600; margin-left:.4rem}
-    .led.red{background:#3b0d0d; color:#ffb3b3; border:1px solid #551313}
-    .led.green{background:#0f3521; color:#b9ffc9; border:1px solid #165a32}
-    .controls{display:flex; gap:10px; margin-top:12px}
-    button{background:#1b2a3a; color:#e6eef7; border:1px solid #28455f; border-radius:10px; padding:10px 14px; cursor:pointer}
+    body{margin:0;font-family:'Segoe UI',Roboto,Arial;background:#05080d;color:#e6eef7;display:flex;align-items:center;justify-content:center;height:100vh;overflow:hidden}
+    .card{background:#0d1118;border:1px solid #1a2230;border-radius:18px;padding:24px;width:min(900px,92vw);box-shadow:0 0 25px rgba(0,0,0,.6)}
+    h1{text-align:center;margin:0 0 20px 0;color:#c3d4f5;font-size:26px;letter-spacing:1px}
+    .logo{text-align:center;margin-bottom:10px;}
+    .logo img{height:70px}
+    video,canvas{width:100%;border-radius:12px;background:#000}
+    .controls{display:flex;gap:12px;margin-top:12px;justify-content:center}
+    button{background:#1b2a3a;color:#fff;border:1px solid #2e4660;border-radius:8px;padding:10px 16px;cursor:pointer;transition:background .2s}
     button:hover{background:#213247}
-    #codeArea{margin-top:14px; font-size:18px; font-weight:700; color:#dff7e3; display:none}
+    .status{text-align:center;margin-top:12px;font-size:15px;color:#9cb4d2}
+    .led{display:inline-block;padding:.3rem .8rem;border-radius:999px;margin-left:.5rem;font-weight:600}
+    .led.red{background:#401212;color:#ffb6b6;border:1px solid #652020}
+    .led.green{background:#0f3521;color:#c1ffcb;border:1px solid #1e5d37}
+    #codeArea{margin-top:18px;text-align:center;font-size:20px;font-weight:600;color:#bdf7cb;display:none}
     #codeArea.show{display:block}
-    .small{font-size:12px; opacity:.8}
+    #matches{text-align:center;font-size:12px;opacity:.8;margin-top:8px}
   </style>
 </head>
 <body>
   <div class="card">
-    <h1>Control de acceso</h1>
-    <div class="row">
-      <div class="pane">
-        <video id="video" autoplay playsinline muted></video>
-        <div class="controls">
-          <button id="startBtn">Iniciar</button>
-          <button id="stopBtn">Detener</button>
-          <button id="diagBtn">/diag</button>
-        </div>
-        <div class="status">
-          Estado: <span id="status">Detenido</span>
-          <span id="led" class="led red">Idle</span>
-        </div>
-        <div id="codeArea"></div>
-        <div class="small" id="matches"></div>
-      </div>
-      <div class="pane">
-        <canvas id="canvas" width="640" height="480"></canvas>
-        <div class="small">* Enviamos una captura cada ~1s a <code>/scan</code>.</div>
-      </div>
+    <div class="logo"><img src="https://upload.wikimedia.org/wikipedia/commons/2/2d/007_Logo.svg" alt="Bond logo"></div>
+    <h1>Acceso Secreto — Agente 007</h1>
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas" width="640" height="480" hidden></canvas>
+
+    <div class="controls">
+      <button id="startBtn">Iniciar escaneo</button>
+      <button id="stopBtn">Detener</button>
+      <button id="diagBtn">/diag</button>
     </div>
+
+    <div class="status">
+      Estado: <span id="status">Detenido</span>
+      <span id="led" class="led red">Idle</span>
+    </div>
+    <div id="codeArea"></div>
+    <div id="matches"></div>
   </div>
 
   <script>
-    const video   = document.getElementById('video');
-    const canvas  = document.getElementById('canvas');
-    const ctx     = canvas.getContext('2d');
-    const statusE = document.getElementById('status');
-    const ledE    = document.getElementById('led');
-    const startB  = document.getElementById('startBtn');
-    const stopB   = document.getElementById('stopBtn');
-    const diagB   = document.getElementById('diagBtn');
-    const codeA   = document.getElementById('codeArea');
-    const matches = document.getElementById('matches');
+    const video=document.getElementById('video'),
+          canvas=document.getElementById('canvas'),
+          ctx=canvas.getContext('2d'),
+          statusE=document.getElementById('status'),
+          ledE=document.getElementById('led'),
+          codeA=document.getElementById('codeArea'),
+          matches=document.getElementById('matches');
+    let timer=null;
 
-    let timer = null;
-
-    async function setupCam() {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
-      video.srcObject = stream;
-      await video.play();
+    async function setupCam(){
+      const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user"},audio:false});
+      video.srcObject=stream; await video.play();
     }
-
-    function captureToDataURL() {
-      const w = canvas.width, h = canvas.height;
-      ctx.drawImage(video, 0, 0, w, h);
-      return canvas.toDataURL('image/png'); // base64
-    }
-
-    async function pingScan() {
-      try {
-        const dataURL = captureToDataURL();
-        const r = await fetch('/scan', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: dataURL })
-        });
-        const j = await r.json();
-
-        if (!j.ok) {
-          statusE.textContent = j.error || j.msg || 'Error';
-          ledE.textContent = 'Error';
-          ledE.className = 'led red';
-          return;
-        }
-
-        if (j.recognized) {
-          const msg = j.message || "agente encubierto, puedes pasar al bunker con tu equipo";
-          codeA.textContent = msg;          // SIEMPRE la misma frase
+    function snap(){ctx.drawImage(video,0,0,canvas.width,canvas.height);return canvas.toDataURL('image/png');}
+    async function scan(){
+      try{
+        const r=await fetch('/scan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:snap()})});
+        const j=await r.json();
+        if(!j.ok){statusE.textContent=j.error||j.msg||'Error';return;}
+        if(j.recognized){
+          codeA.textContent=j.message||"agente encubierto, puedes pasar al bunker con tu equipo";
           codeA.classList.add('show');
-          statusE.textContent = 'Match confirmado';
-          ledE.textContent = 'Authorized';
-          ledE.className = 'led green';
-          matches.textContent = `Matches: ${j.matches}  |  Second: ${j.second_best}`;
-          stopAuto();
-        } else {
-          statusE.textContent = 'No coincide';
-          ledE.textContent = 'Scanning';
-          ledE.className = 'led red';
-          matches.textContent = `Matches: ${j.matches ?? 0}  |  Second: ${j.second_best ?? 0}`;
+          statusE.textContent='Match confirmado';
+          ledE.textContent='Authorized'; ledE.className='led green';
+          matches.textContent=`Matches: ${j.matches} | Second: ${j.second_best}`;
+          clearInterval(timer); timer=null;
+        }else{
+          statusE.textContent='Escaneando...';
+          ledE.textContent='Scanning'; ledE.className='led red';
+          matches.textContent=`Matches: ${j.matches??0}`;
         }
-      } catch (e) {
-        statusE.textContent = 'Error de red';
-        ledE.textContent = 'Error';
-        ledE.className = 'led red';
-      }
+      }catch(e){statusE.textContent='Error';}
     }
-
-    function startAuto() {
-      if (timer) return;
-      statusE.textContent = 'Escaneando...';
-      ledE.textContent = 'Scanning';
-      ledE.className = 'led red';
-      timer = setInterval(pingScan, 1000);
-    }
-
-    function stopAuto() {
-      if (timer) clearInterval(timer);
-      timer = null;
-      if (!codeA.classList.contains('show')) {
-        statusE.textContent = 'Detenido';
-        ledE.textContent = 'Idle';
-        ledE.className = 'led red';
-      }
-    }
-
-    startB.onclick = startAuto;
-    stopB.onclick  = stopAuto;
-    diagB.onclick  = () => window.open('/diag', '_blank');
-
-    // Arranca cámara al cargar
-    setupCam().catch(err => {
-      statusE.textContent = 'Permiso de cámara denegado';
-    });
+    document.getElementById('startBtn').onclick=()=>{if(!timer){timer=setInterval(scan,1000);}};
+    document.getElementById('stopBtn').onclick=()=>{clearInterval(timer);timer=null;statusE.textContent='Detenido';ledE.textContent='Idle';ledE.className='led red';};
+    document.getElementById('diagBtn').onclick=()=>window.open('/diag','_blank');
+    setupCam().catch(()=>statusE.textContent='Permiso cámara denegado');
   </script>
 </body>
 </html>
