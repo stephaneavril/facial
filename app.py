@@ -117,7 +117,7 @@ def orb_match_count_des(des1, des2):
 def index():
     return render_template('index.html')
 
-  @app.route('/scan', methods=['POST'])
+@app.route('/scan', methods=['POST'])
 def scan():
     """
     Escaneo modo juego — cualquier rostro activa el mensaje
