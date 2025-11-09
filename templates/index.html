@@ -1,151 +1,144 @@
 <!doctype html>
-<html>
+<html lang="es">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>007 Secure Scan</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Face Access</title>
   <style>
-    :root{
-      --bg:#05070C;
-      --panel:#0B0F19;
-      --panel2:#0F1524;
-      --accent:#35F3B7;
-      --accent2:#24B1FF;
-      --danger:#FF4D70;
-      --muted:#9bb3c7;
-    }
-    html,body{height:100%;}
-    body{
-      margin:0;
-      height:100%;
-      color:#E6EEF7;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial;
-      background:
-        radial-gradient(1200px 800px at 120% -10%, #0b1a2a55, transparent 60%),
-        radial-gradient(900px 700px at -30% 120%, #141e2f66, transparent 60%),
-        linear-gradient(180deg, #06080F 0%, #05070C 100%);
-    }
-    .shell{max-width:1100px;margin:32px auto;padding:20px;}
-    .header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px;}
-    .title{font-weight:800;letter-spacing:.5px;font-size:24px}
-    .chip{font-size:12px;opacity:.8;padding:6px 10px;border:1px solid #1A2436;border-radius:20px;background:linear-gradient(180deg,#0E1422,#0B1019);}
-    .grid{display:grid;grid-template-columns:1.3fr .7fr;gap:16px}
-    .panel{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid #10192a;border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,.35);overflow:hidden;}
-    .camera{position:relative;padding:14px;}
-    video{width:100%;aspect-ratio:4/3;background:#000;border-radius:10px;}
-    canvas{display:none;}
-    .hud{pointer-events:none;position:absolute;inset:14px;border-radius:10px;overflow:hidden;}
-    .reticle{position:absolute;left:50%;top:50%;width:34%;aspect-ratio:1;transform:translate(-50%,-50%);border:2px dashed rgba(255,255,255,.18);border-radius:50%;}
-    .sweep{position:absolute;left:50%;top:50%;width:46%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;
-      background: conic-gradient(from 0deg, rgba(53,243,183,.35), rgba(53,243,183,0) 60%);
-      filter: blur(10px) saturate(120%);animation: spin 2.6s linear infinite;opacity:.65;}
-    @keyframes spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
-    .scanline{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg, transparent, rgba(36,177,255,.9), transparent);animation: line 2.4s linear infinite;}
-    @keyframes line{0%{top:10%}50%{top:80%}100%{top:10%}}
-    .right{display:flex;flex-direction:column;height:100%}
-    .right .inner{padding:16px;display:flex;flex-direction:column;gap:14px}
-    .row{display:flex;align-items:center;justify-content:space-between;gap:10px}
-    .label{font-size:12px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
-    .value{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}
-    .btns{display:flex;gap:10px;flex-wrap:wrap}
-    .btn{background:linear-gradient(180deg,#0E2031,#0C1826);border:1px solid #183047;color:#E6EEF7;padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:700;}
-    .btn.primary{border-color:#1a3e3a;background:linear-gradient(180deg,#0f2a24,#0b1f1a);box-shadow:inset 0 0 0 1px #123a32, 0 0 20px rgba(53,243,183,.12)}
-    .btn:active{transform:translateY(1px)}
-    .code{margin-top:8px;font-size:28px;font-weight:900;color:var(--accent);letter-spacing:.06em;text-shadow:0 0 22px rgba(53,243,183,.35);opacity:0;transform: translateY(6px);transition:.2s ease;}
-    .code.show{opacity:1;transform:none}
-    .tiny{font-size:12px;color:var(--muted)}
-    .divider{height:1px;background:linear-gradient(90deg, transparent, #16223a, transparent);margin:6px 0}
-    .badge{font-size:11px;color:#77ffd9}
-    .footer{padding:10px 16px;border-top:1px solid #111a2a;background:rgba(6,10,18,.35)}
-    .led{width:9px;height:9px;border-radius:50%;background:radial-gradient(circle at 30% 30%, #88ffd4, #18a37f 60%, #0c5847);box-shadow:0 0 14px rgba(53,243,183,.6);display:inline-block;vertical-align:middle;margin-right:8px;}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial; margin:0; background:#0b0f14; color:#e6eef7; display:flex; min-height:100vh; align-items:center; justify-content:center}
+    .card{width:min(920px,92vw); background:#121a23; border:1px solid #203040; border-radius:18px; padding:24px 24px 28px}
+    h1{margin:0 0 10px 0; font-size:22px; color:#b9d4ff}
+    .row{display:grid; grid-template-columns: 1fr 1fr; gap:18px}
+    .pane{background:#0f151d; border:1px solid #1c2937; border-radius:14px; padding:14px}
+    video,canvas{width:100%; border-radius:10px; background:#000}
+    .status{margin-top:10px; font-size:14px; color:#91a9c4}
+    .led{display:inline-block; padding:.25rem .6rem; border-radius:999px; font-weight:600; margin-left:.4rem}
+    .led.red{background:#3b0d0d; color:#ffb3b3; border:1px solid #551313}
+    .led.green{background:#0f3521; color:#b9ffc9; border:1px solid #165a32}
+    .controls{display:flex; gap:10px; margin-top:12px}
+    button{background:#1b2a3a; color:#e6eef7; border:1px solid #28455f; border-radius:10px; padding:10px 14px; cursor:pointer}
+    button:hover{background:#213247}
+    #codeArea{margin-top:14px; font-size:18px; font-weight:700; color:#dff7e3; display:none}
+    #codeArea.show{display:block}
+    .small{font-size:12px; opacity:.8}
   </style>
 </head>
 <body>
-<div class="shell">
-  <div class="header">
-    <div class="title">007 Secure Scan</div>
-    <div class="chip">Prototype • Escape Game</div>
-  </div>
-
-  <div class="grid">
-    <div class="panel camera">
-      <video id="video" autoplay playsinline></video>
-      <div class="hud">
-        <div class="scanline"></div>
-        <div class="sweep"></div>
-        <div class="reticle"></div>
-      </div>
-      <canvas id="snap" width="640" height="480"></canvas>
-    </div>
-
-    <div class="panel right">
-      <div class="inner">
-        <div class="row"><div class="label">Status</div><div class="value" id="status">Inicializando…</div></div>
-        <div class="row"><div class="label">Matches</div><div class="value" id="matches">0</div></div>
-        <div class="divider"></div>
-        <div class="btns">
-          <button id="scanBtn" class="btn primary">Escanear ahora</button>
-          <button id="autoBtn" class="btn">Auto-scan</button>
-          <button id="resetBtn" class="btn">Reset</button>
+  <div class="card">
+    <h1>Control de acceso</h1>
+    <div class="row">
+      <div class="pane">
+        <video id="video" autoplay playsinline muted></video>
+        <div class="controls">
+          <button id="startBtn">Iniciar</button>
+          <button id="stopBtn">Detener</button>
+          <button id="diagBtn">/diag</button>
         </div>
-        <div id="codeArea" class="code"></div>
-        <div class="tiny">Verificación silenciosa. El sistema compara el rostro con un patrón interno.</div>
+        <div class="status">
+          Estado: <span id="status">Detenido</span>
+          <span id="led" class="led red">Idle</span>
+        </div>
+        <div id="codeArea"></div>
+        <div class="small" id="matches"></div>
       </div>
-      <div class="footer">
-        <span class="led"></span><span class="badge" id="ledText">Ready</span>
+      <div class="pane">
+        <canvas id="canvas" width="640" height="480"></canvas>
+        <div class="small">* Enviamos una captura cada ~1s a <code>/scan</code>.</div>
       </div>
     </div>
   </div>
-</div>
 
-<script>
-const video=document.getElementById('video');
-const snap=document.getElementById('snap');
-const ctx=snap.getContext('2d');
-const statusEl=document.getElementById('status');
-const matchesEl=document.getElementById('matches');
-const codeArea=document.getElementById('codeArea');
-const scanBtn=document.getElementById('scanBtn');
-const autoBtn=document.getElementById('autoBtn');
-const resetBtn=document.getElementById('resetBtn');
-const ledText=document.getElementById('ledText');
-let auto=false, autoTimer=null;
+  <script>
+    const video   = document.getElementById('video');
+    const canvas  = document.getElementById('canvas');
+    const ctx     = canvas.getContext('2d');
+    const statusE = document.getElementById('status');
+    const ledE    = document.getElementById('led');
+    const startB  = document.getElementById('startBtn');
+    const stopB   = document.getElementById('stopBtn');
+    const diagB   = document.getElementById('diagBtn');
+    const codeA   = document.getElementById('codeArea');
+    const matches = document.getElementById('matches');
 
-async function startCamera(){
-  try{
-    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'},audio:false});
-    video.srcObject=stream; await video.play();
-    statusEl.textContent='Cámara lista'; ledText.textContent='Live';
-  }catch(e){
-    statusEl.textContent='Error cámara (HTTPS y permisos)'; ledText.textContent='Blocked';
-  }
-}
-function takeShot(){
-  const w=video.videoWidth||640, h=video.videoHeight||480;
-  snap.width=w; snap.height=h; ctx.drawImage(video,0,0,w,h);
-  return snap.toDataURL('image/png');
-}
-async function scanOnce(){
-  statusEl.textContent='Escaneando…';
-  const dataUrl=takeShot();
-  try{
-    const resp=await fetch('/scan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:dataUrl})});
-    const j=await resp.json();
-    if(!j.ok){statusEl.textContent='Error';return;}
-    matchesEl.textContent=j.matches;
-    if(j.recognized){
-      codeArea.textContent='CÓDIGO: '+j.code; codeArea.classList.add('show');
-      statusEl.textContent='Match confirmado'; ledText.textContent='Authorized';
-      stopAuto();
-    }else{ statusEl.textContent='No coincide'; }
-  }catch(err){ statusEl.textContent='Error de red'; }
-}
-function startAuto(){ if(autoTimer)return; auto=true; autoBtn.classList.add('primary'); statusEl.textContent='Auto-scan activo'; autoTimer=setInterval(scanOnce,1700); }
-function stopAuto(){ auto=false; autoBtn.classList.remove('primary'); if(autoTimer){clearInterval(autoTimer); autoTimer=null;} }
-scanBtn.addEventListener('click',scanOnce);
-autoBtn.addEventListener('click',()=>auto?stopAuto():startAuto());
-resetBtn.addEventListener('click',()=>{stopAuto(); matchesEl.textContent='0'; codeArea.textContent=''; codeArea.classList.remove('show'); statusEl.textContent='Listo';});
-startCamera();
-</script>
+    let timer = null;
+
+    async function setupCam() {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+      video.srcObject = stream;
+      await video.play();
+    }
+
+    function captureToDataURL() {
+      const w = canvas.width, h = canvas.height;
+      ctx.drawImage(video, 0, 0, w, h);
+      return canvas.toDataURL('image/png'); // base64
+    }
+
+    async function pingScan() {
+      try {
+        const dataURL = captureToDataURL();
+        const r = await fetch('/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: dataURL })
+        });
+        const j = await r.json();
+
+        if (!j.ok) {
+          statusE.textContent = j.error || j.msg || 'Error';
+          ledE.textContent = 'Error';
+          ledE.className = 'led red';
+          return;
+        }
+
+        if (j.recognized) {
+          const msg = j.message || "agente encubierto, puedes pasar al bunker con tu equipo";
+          codeA.textContent = msg;          // SIEMPRE la misma frase
+          codeA.classList.add('show');
+          statusE.textContent = 'Match confirmado';
+          ledE.textContent = 'Authorized';
+          ledE.className = 'led green';
+          matches.textContent = `Matches: ${j.matches}  |  Second: ${j.second_best}`;
+          stopAuto();
+        } else {
+          statusE.textContent = 'No coincide';
+          ledE.textContent = 'Scanning';
+          ledE.className = 'led red';
+          matches.textContent = `Matches: ${j.matches ?? 0}  |  Second: ${j.second_best ?? 0}`;
+        }
+      } catch (e) {
+        statusE.textContent = 'Error de red';
+        ledE.textContent = 'Error';
+        ledE.className = 'led red';
+      }
+    }
+
+    function startAuto() {
+      if (timer) return;
+      statusE.textContent = 'Escaneando...';
+      ledE.textContent = 'Scanning';
+      ledE.className = 'led red';
+      timer = setInterval(pingScan, 1000);
+    }
+
+    function stopAuto() {
+      if (timer) clearInterval(timer);
+      timer = null;
+      if (!codeA.classList.contains('show')) {
+        statusE.textContent = 'Detenido';
+        ledE.textContent = 'Idle';
+        ledE.className = 'led red';
+      }
+    }
+
+    startB.onclick = startAuto;
+    stopB.onclick  = stopAuto;
+    diagB.onclick  = () => window.open('/diag', '_blank');
+
+    // Arranca cámara al cargar
+    setupCam().catch(err => {
+      statusE.textContent = 'Permiso de cámara denegado';
+    });
+  </script>
 </body>
 </html>

@@ -1,14 +1,4 @@
-# app.py — Reconocimiento de máscaras múltiples con ORB
-# -----------------------------------------------
-# Coloca tus PNG de máscaras en: static/targets/
-# Define los códigos en codes.json (archivo -> código).
-# Ejemplo codes.json:
-# {
-#   "mask_265.png": "265",
-#   "mask_901.png": "901",
-#   "mask_777.png": "777"
-# }
-
+# app.py — Reconocimiento multi-máscara con mensaje fijo al reconocer
 from flask import Flask, render_template, request, jsonify, send_from_directory
 import os, json, cv2, numpy as np, base64
 from io import BytesIO
@@ -17,40 +7,38 @@ from PIL import Image
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024  # 8MB
 
-# --- Configuración ---
-TARGETS_DIR = os.path.join('static', 'targets')
-CODES_FILE  = 'codes.json'
+# --- Rutas ABSOLUTAS (evita problemas en Render) ---
+BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
+TARGETS_DIR = os.path.join(BASE_DIR, 'static', 'targets')   # o cámbialo a 'static' si dejaste ahí las máscaras
+CODES_FILE  = os.path.join(BASE_DIR, 'codes.json')
 
-# Umbrales (ajusta según pruebas)
-THRESH      = 16       # mínimo de matches "buenos" para reconocer (empezar bajo para demo)
-RATIO_BEST2 = 1.15     # mejor debe superar al segundo al menos 15%
+# --- Parámetros (ajústalos a tu gusto) ---
+THRESH      = 16     # mínimo de matches buenos
+RATIO_BEST2 = 1.15   # el mejor debe ser 15% superior al segundo
+MESSAGE_OK  = "agente encubierto, puedes pasar al bunker con tu equipo"
 
 os.makedirs(TARGETS_DIR, exist_ok=True)
 
-# --- ORB global + matcher ---
+# --- ORB + Matcher (global) ---
 ORB = cv2.ORB_create(nfeatures=1000)
 BF  = cv2.BFMatcher(cv2.NORM_HAMMING)
 
-# Cache en memoria: cada item: {"filename","code","kp","des"}
-TARGETS_CACHE = []
+# Cache de targets en memoria
+TARGETS_CACHE = []   # cada item: {"filename","code","kp","des"}
 
-# ---------- Utilidades de imagen ----------
+# ---------- Utilidades ----------
 def b64_to_image(b64_string):
-    """Convierte 'data:image/...;base64,xxxx' -> ndarray BGR (OpenCV)"""
     header, encoded = b64_string.split(',', 1)
     data = base64.b64decode(encoded)
     img = Image.open(BytesIO(data)).convert('RGB')
-    arr = np.array(img)[:, :, ::-1]  # RGB -> BGR
-    return arr
+    return np.array(img)[:, :, ::-1]  # RGB -> BGR
 
 def detect_face_and_crop(img_bgr):
-    """Detecta rostro y recorta con padding; si no detecta, retorna None."""
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
     haar = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
     faces = haar.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(80,80))
     if len(faces) == 0:
         return None
-    # toma la cara más grande
     faces = sorted(faces, key=lambda r: r[2]*r[3], reverse=True)
     (x,y,w,h) = faces[0]
     pad = int(0.40 * h)
@@ -59,7 +47,6 @@ def detect_face_and_crop(img_bgr):
     return img_bgr[y1:y2, x1:x2]
 
 def prep_gray_resized(im_bgr, max_sz=800):
-    """Grises + resize para consistencia."""
     g = cv2.cvtColor(im_bgr, cv2.COLOR_BGR2GRAY)
     h,w = g.shape
     if max(h,w) > max_sz:
@@ -67,7 +54,6 @@ def prep_gray_resized(im_bgr, max_sz=800):
         g = cv2.resize(g, (int(w*scale), int(h*scale)))
     return g
 
-# ---------- Carga de códigos/targets ----------
 def load_codes():
     if os.path.exists(CODES_FILE):
         with open(CODES_FILE, 'r', encoding='utf-8') as f:
@@ -75,20 +61,18 @@ def load_codes():
     return {}
 
 def infer_code_from_name(filename):
-    """Si no hay entrada en codes.json, infiere con dígitos del nombre."""
     import re
     digits = ''.join(re.findall(r'\d+', filename))
     return digits if digits else filename
 
 def preload_targets():
-    """Carga todos los PNG/JPG en static/targets y precalcula descriptores ORB."""
+    """Carga todas las máscaras y precalcula descriptores."""
     global TARGETS_CACHE
     TARGETS_CACHE = []
-
     codes_map = load_codes()
-    files = sorted(os.listdir(TARGETS_DIR))
-    for fname in files:
-        if not fname.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+
+    for fname in sorted(os.listdir(TARGETS_DIR)):
+        if not fname.lower().endswith(('.png','.jpg','.jpeg','.webp')):
             continue
         path = os.path.join(TARGETS_DIR, fname)
         img  = cv2.imread(path)
@@ -97,24 +81,16 @@ def preload_targets():
         g = prep_gray_resized(img)
         kp, des = ORB.detectAndCompute(g, None)
         code = str(codes_map.get(fname, infer_code_from_name(fname)))
-        TARGETS_CACHE.append({
-            "filename": fname,
-            "code": code,
-            "kp": kp,
-            "des": des
-        })
+        TARGETS_CACHE.append({"filename": fname, "code": code, "kp": kp, "des": des})
     return len(TARGETS_CACHE)
 
 def ensure_targets_loaded():
-    """Asegura que el índice esté cargado; si no, recarga."""
     if not TARGETS_CACHE:
         n = preload_targets()
         if n == 0:
             raise RuntimeError("No targets found in static/targets. ¿Subiste los PNG y codes.json?")
 
-# ---------- Matching ----------
 def orb_match_count_des(face_des, target_des):
-    """Cuenta matches 'buenos' entre descriptores ya calculados."""
     if face_des is None or target_des is None:
         return 0
     try:
@@ -133,15 +109,14 @@ def orb_match_count_des(face_des, target_des):
 # ---------- Rutas ----------
 @app.route('/')
 def index():
-    # Si no tienes template, puedes devolver un texto simple o servir tu index.html
     try:
         return render_template('index.html')
     except Exception:
-        return "Face Matcher live. Usa POST /scan", 200
+        return "Face Matcher listo. Usa POST /scan", 200
 
 @app.route('/scan', methods=['POST'])
 def scan():
-    """Recibe JSON {'image': 'data:image/...;base64,xxx'} y devuelve reconocimiento."""
+    """Recibe {'image': 'data:image/...;base64,xxx'} y responde si reconoce."""
     try:
         ensure_targets_loaded()
 
@@ -149,17 +124,15 @@ def scan():
         if not data:
             return jsonify({'ok': False, 'msg': 'No image sent'}), 400
 
-        # 1) Decodificar
         try:
             img = b64_to_image(data)
         except Exception:
             return jsonify({'ok': False, 'msg': 'Invalid image'}), 400
 
-        # 2) Intentar rostro; si falla, usar imagen completa (útil con medias)
         face = detect_face_and_crop(img)
         used_fallback = False
         if face is None:
-            face = img
+            face = img  # fallback cuando el detector falla (máscara/mesh)
             used_fallback = True
 
         g = prep_gray_resized(face)
@@ -167,7 +140,6 @@ def scan():
         if des is None or len(des) == 0:
             return jsonify({'ok': True, 'recognized': False, 'msg': 'No features on image', 'fallback': used_fallback}), 200
 
-        # 3) Comparar contra todas las máscaras
         best_good = -1
         second_good = 0
         best_t = None
@@ -185,69 +157,27 @@ def scan():
 
         recognized = (best_good >= THRESH) and (best_good >= second_good * RATIO_BEST2)
 
+        # >>> Aquí va TU mensaje fijo <<<
         return jsonify({
             'ok': True,
             'recognized': recognized,
             'matches': int(best_good),
             'second_best': int(second_good),
-            'filename': best_t["filename"] if recognized else None,
-            'code': best_t["code"] if recognized else None,
+            'code': best_t["code"] if recognized else None,  # guardado por si lo quieres usar
+            'message': MESSAGE_OK if recognized else None,   # siempre el mismo texto al reconocer
             'fallback': used_fallback
         }), 200
 
     except Exception as e:
-        # Evita 500 silenciosos: devuelve detalle para depurar
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 @app.route('/reload_targets', methods=['POST'])
 def reload_targets():
-    """Recarga los PNG del servidor (útil tras subir nuevas máscaras)."""
     n = preload_targets()
     return jsonify({'ok': True, 'loaded': n})
 
-@app.route('/add_target', methods=['POST'])
-def add_target():
-    """
-    Sube una nueva máscara por API.
-    JSON:
-    {
-      "image": "data:image/png;base64,...",
-      "filename": "mask_123.png",
-      "code": "123"
-    }
-    """
-    payload = request.get_json(silent=True) or {}
-    b64 = payload.get('image')
-    fname = payload.get('filename')
-    code  = payload.get('code')
-
-    if not (b64 and fname and code):
-        return jsonify({'ok': False, 'msg': 'image, filename, code are required'}), 400
-
-    # Guardar imagen
-    try:
-        img = b64_to_image(b64)
-    except Exception:
-        return jsonify({'ok': False, 'msg': 'Invalid image'}), 400
-
-    save_path = os.path.join(TARGETS_DIR, fname)
-    ok = cv2.imwrite(save_path, img)
-    if not ok:
-        return jsonify({'ok': False, 'msg': 'Cannot write image'}), 500
-
-    # Actualizar codes.json
-    codes = load_codes()
-    codes[fname] = str(code)
-    with open(CODES_FILE, 'w', encoding='utf-8') as f:
-        json.dump(codes, f, ensure_ascii=False, indent=2)
-
-    # Recargar cache
-    preload_targets()
-    return jsonify({'ok': True, 'saved': fname, 'code': str(code)})
-
 @app.route('/diag')
 def diag():
-    """Diagnóstico: cuántos targets cargados y si tienen descriptores."""
     try:
         ensure_targets_loaded()
         stats = []
@@ -259,14 +189,10 @@ def diag():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
-# Servir estáticos (si lo necesitas explícito)
 @app.route('/static/<path:filename>')
 def static_files(filename):
     return send_from_directory('static', filename)
 
-# ---------- Main ----------
 if __name__ == '__main__':
-    # Para local: python app.py (Render usará gunicorn)
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
-    
