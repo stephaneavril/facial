@@ -117,66 +117,36 @@ def orb_match_count_des(des1, des2):
 def index():
     return render_template('index.html')
 
-@app.route('/scan', methods=['POST'])
+  @app.route('/scan', methods=['POST'])
 def scan():
     """
-    Request: {image: 'data:image/png;base64,...'}
-    Response:
-      { ok: true, recognized: bool, code: '265' | null, matches: int, second_best: int, message: str|null }
+    Escaneo modo juego — cualquier rostro activa el mensaje
     """
     try:
-        ensure_targets_loaded()
+        # Recibe la imagen pero no hace validación (modo libre)
+        data = request.json.get('image')
+        if not data:
+            return jsonify({'ok': False, 'msg': 'No image sent'}), 400
+
+        # Solo decodifica para evitar error de formato
+        try:
+            _ = base64.b64decode(data.split(',', 1)[1])
+        except Exception:
+            return jsonify({'ok': False, 'msg': 'Invalid image'}), 400
+
+        # Modo juego: siempre muestra el mensaje sin validar
+        return jsonify({
+            'ok': True,
+            'recognized': True,
+            'code': '007',  # puedes poner 265, 777 o el que quieras mostrar
+            'matches': 0,
+            'second_best': 0,
+            'message': "agente encubierto, puedes pasar al bunker con tu equipo"
+        }), 200
+
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
-    payload = request.get_json(silent=True) or {}
-    img_b64 = payload.get('image')
-    if not img_b64:
-        return jsonify({'ok': False, 'msg': 'No image sent'}), 400
-
-    try:
-        img = b64_to_image(img_b64)
-    except Exception as e:
-        return jsonify({'ok': False, 'msg': 'Invalid image', 'detail': str(e)}), 400
-
-    face = detect_face_and_crop(img)
-    used_fallback = False
-    if face is None:
-        # fallback a imagen completa si el Haar falla (útil con medias/retículas)
-        face = img
-        used_fallback = True
-
-    g = prep_gray_resized(face)
-    kp, des = ORB.detectAndCompute(g, None)
-    if des is None or len(des) == 0:
-        return jsonify({'ok': True, 'recognized': False, 'msg': 'No features on image', 'fallback': used_fallback}), 200
-
-    best_good, second_good, best_t = -1, 0, None
-    for t in TARGETS_CACHE:
-        good = orb_match_count_des(des, t["des"])
-        if good > best_good:
-            second_good = best_good if best_good >= 0 else 0
-            best_good = good
-            best_t = t
-        elif good > second_good:
-            second_good = good
-
-    if best_t is None:
-        return jsonify({'ok': True, 'recognized': False, 'msg': 'No valid targets loaded'}), 200
-
-    recognized = (best_good >= THRESH) and (best_good >= second_good * RATIO_BEST2)
-    # autorizar si coincide y el código está dentro de REGISTERED_CODES
-    authorized = recognized and (best_t["code"] in REGISTERED_CODES)
-
-    return jsonify({
-        'ok': True,
-        'recognized': bool(authorized),
-        'code': best_t["code"] if authorized else None,
-        'matches': int(best_good),
-        'second_best': int(second_good),
-        'message': (f"CÓDIGO: {best_t['code']}" if authorized else None),
-        'fallback': used_fallback
-    }), 200
 
 @app.route('/reload_targets', methods=['POST'])
 def reload_targets():
@@ -227,4 +197,3 @@ if __name__ == '__main__':
     preload_targets()  # carga inicial
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
-    
